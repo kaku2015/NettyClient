@@ -1,13 +1,12 @@
 package com.skr.nettyclient;
 
-import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-import android.widget.Button;
 import android.widget.Toast;
+
+import com.socks.library.KLog;
 
 import java.net.InetSocketAddress;
 
@@ -25,20 +24,19 @@ import io.netty.channel.socket.nio.NioSocketChannel;
  * @since 2017/2/13
  */
 public class ClientActivity extends AppCompatActivity {
-    private static final String TAG = "MainActivity";
-    private static Context context;
+    private static final String LOG_TAG = "ClientActivity";
     public static int MSG_REC = 0xabc;
-    public static int PORT = 7879;
+    public static int PORT = 7878;
     public static final String HOST = "192.168.1.115";
-    private NioEventLoopGroup group;
-    private Button sendButton;
+    private NioEventLoopGroup mNioEventLoopGroup;
     private Channel mChannel;
-    private ChannelFuture cf;
+    private ChannelFuture mChannelFuture;
+
     private Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             if (msg.what == MSG_REC) {
-                Toast.makeText(context, msg.obj.toString(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(ClientActivity.this, msg.obj.toString(), Toast.LENGTH_SHORT).show();
             }
         }
     };
@@ -53,33 +51,31 @@ public class ClientActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_client);
         ButterKnife.bind(this);
-        context = this;
-        connected();
+        attemptConnect();
     }
 
-    // 连接到Socket服务端
-    private void connected() {
+    private void attemptConnect() {
         new Thread() {
             @Override
             public void run() {
-                group = new NioEventLoopGroup();
+                mNioEventLoopGroup = new NioEventLoopGroup();
                 try {
-                    // Client服务启动器 3.x的ClientBootstrap
-                    // 改为Bootstrap，且构造函数变化很大，这里用无参构造。
+                    // Client服务启动器
                     Bootstrap bootstrap = new Bootstrap();
                     // 指定EventLoopGroup
-                    bootstrap.group(group);
+                    // 相比于服务端，客户端只需要创建一个EventLoopGroup，因为它不需要独立的线程去监听客户端连接
+                    bootstrap.group(mNioEventLoopGroup);
                     // 指定channel类型
                     bootstrap.channel(NioSocketChannel.class);
                     // 指定Handler
-                    bootstrap.handler(new MyClientInitializer(context, mHandler));
+                    bootstrap.handler(new MyClientInitializer(ClientActivity.this, mHandler));
                     bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
                     bootstrap.option(ChannelOption.TCP_NODELAY, true);
                     bootstrap.option(ChannelOption.SO_TIMEOUT, 5000);
                     // 连接到本地的7878端口的服务端
-                    cf = bootstrap.connect(new InetSocketAddress(
+                    mChannelFuture = bootstrap.connect(new InetSocketAddress(
                             HOST, PORT));
-                    mChannel = cf.sync().channel();
+                    mChannel = mChannelFuture.sync().channel();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -93,8 +89,10 @@ public class ClientActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    Log.i(TAG, "mChannel.write sth & " + mChannel.isOpen());
-                    mChannel.writeAndFlush("hello,this message is from client.\r\n");
+                    KLog.i(LOG_TAG, "mChannel.write sth & mChannel.isOpen(): " + mChannel.isOpen());
+                    // 写入Buffer并刷入
+                    // 向服务端发送在控制台输入的文本 并用"\r\n"结尾之所以用\r\n结尾 是因为我们在handler中添加了 DelimiterBasedFrameDecoder 帧解码。 这个解码器是一个根据\n符号位分隔符的解码器。所以每条消息的最后必须加上\n否则无法识别和解码
+                    mChannel.writeAndFlush("你好,我是客户端.\r\n");
                     mChannel.read();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -106,8 +104,8 @@ public class ClientActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (group != null) {
-            group.shutdownGracefully();
+        if (mNioEventLoopGroup != null) {
+            mNioEventLoopGroup.shutdownGracefully();
         }
     }
 }
