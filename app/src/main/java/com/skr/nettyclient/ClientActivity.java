@@ -26,7 +26,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 public class ClientActivity extends AppCompatActivity {
     private static final String LOG_TAG = "ClientActivity";
     public static int MSG_REC = 0xabc;
-    public static int PORT = 7878;
+    public static int PORT = 7891;
     public static final String HOST = "192.168.1.115";
     private NioEventLoopGroup mNioEventLoopGroup;
     private Channel mChannel;
